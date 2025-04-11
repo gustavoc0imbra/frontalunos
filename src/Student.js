@@ -1,19 +1,5 @@
-import React, { useState } from "react";
-import {
-  Box,
-  Button,
-  Container,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Fab,
-  TextField,
-  InputAdornment,
-  ThemeProvider,
-  createTheme,
-  Paper,
-} from "@mui/material";
+import React, { useEffect, useState } from "react";
+import { Box, Button, Container, Dialog, DialogTitle, DialogContent, DialogActions, Fab, TextField, InputAdornment, ThemeProvider, createTheme, Paper } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { Add, Search } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -25,6 +11,8 @@ const darkTheme = createTheme({
 });
 
 export default function Student() {
+  const apiURL = "http://localhost:8080/students";
+
   const [students, setStudents] = useState([]);
   const [student, setStudent] = useState({
     id: null,
@@ -34,8 +22,10 @@ export default function Student() {
     address: "",
   });
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState([]);
+  const [rowSelected, setRowSelected] = useState([]);
   const [search, setSearch] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setLoading] = useState(false);
 
   const openModal = () => setOpen(true);
   const closeModal = () => {
@@ -48,65 +38,193 @@ export default function Student() {
     setStudent((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
+  const saveStudent = async () => {
+    
     if (!student.name || !student.phone || !student.email || !student.address) {
-      Swal.fire("Todos os campos são obrigatórios!", "", "warning");
+      Swal.fire({
+        title: "Todos os campos são obrigatórios!",
+        icon: "warning",
+        theme: "dark",
+        confirmButtonColor: "#2196f3"
+      });
       return;
     }
 
-    if (student.id !== null) {
-      // Editar
-      const updated = students.map((s) => (s.id === student.id ? student : s));
-      setStudents(updated);
-    } else {
-      // Novo cadastro
-      const newStudent = { ...student, id: Date.now() };
-      setStudents((prev) => [...prev, newStudent]);
+    setIsSaving(true);
+
+    const response = await fetch(apiURL,
+      {
+        method: student.id === null ? "POST" : "PUT",
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(student)
+      }
+    )
+
+    if(!response.ok) {
+      setIsSaving(false);
+
+      Swal.fire({
+        title: "Erro ao salvar informações do aluno! Tente novamente!",
+        icon: "error",
+      });
+
+      return;
     }
 
+    const json = await response.json();
+
+    if(json.id) {
+      setIsSaving(false);
+
+      switch(response.status) {
+        case 200:
+          Swal.fire({
+            title: `O(A) aluno(a) ${json.name} foi atualizado com sucesso!`,
+            html: `O ID do(a) Aluno(a) é <b>${json.id}</b>`,
+            icon: "success",
+            theme: "dark",
+            confirmButtonColor: "#2196f3"
+          });
+            
+          const updated = students.map((s) => (s.id === student.id ? student : s));
+          setStudents(updated);
+          break;
+        case 201:
+          setStudents([
+              ...students,
+              json
+          ]);
+
+          Swal.fire({
+              title: `O(A) aluno(a) ${json.name} foi salvo com sucesso!`,
+              html: `O ID do Aluno é <b>${json.id}</b>`,
+              icon: "success",
+              theme: "dark",
+              confirmButtonColor: "#2196f3"
+          });
+
+        break;
+      }
+    }
+
+    setStudent({});
     closeModal();
   };
 
-  const handleDelete = () => {
-    if (selected.length === 0) {
-      Swal.fire("Selecione pelo menos um aluno para excluir.", "", "info");
+  const deleteStudent = async () => {
+    if (rowSelected.length === 0) {
+      Swal.fire({
+        title: "Selecione pelo menos um aluno para excluir.",
+        icon: "info",
+        theme: "dark",
+        confirmButtonColor: "#2196f3"
+      });
       return;
     }
 
-    const remaining = students.filter((s) => !selected.includes(s.id));
-    setStudents(remaining);
-    setSelected([]);
+    const deleteStudent = students.find((s) => s.id === rowSelected[0])
+
+    if(deleteStudent === undefined) {
+      Swal.fire({
+        title: "Selecione um registro válido (com id) para excluir.",
+        icon: "info",
+        theme: "dark",
+        confirmButtonColor: "#2196f3"
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: `Você deseja realmente excluir ${deleteStudent.name}?`,
+      icon: "question",
+      showConfirmButton: true,
+      showDenyButton: true,
+      theme: "dark",
+      confirmButtonColor: "#2196f3",
+      confirmButtonText: "Sim",
+      denyButtonText: "Não"
+    }).then((result) => {
+      if(result.isConfirmed) {
+        fetch(apiURL + `/${deleteStudent.id}`, {
+          method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+        })
+        .then((response) => {
+          if(response.ok) {
+            const remaining = students.filter((s) => !rowSelected.includes(s.id));
+            setStudents(remaining);
+            setRowSelected([]);
+          }
+        })
+        .catch((err) => {
+          console.error(err)
+        })
+      }
+      
+    });
+
+    
   };
 
   const handleEdit = () => {
-    if (selected.length !== 1) {
-      Swal.fire("Selecione apenas um aluno para editar.", "", "warning");
+    if (rowSelected.length !== 1) {
+      Swal.fire({
+        title: "Selecione pelo menos um aluno para editar.",
+        icon: "info",
+        theme: "dark",
+        confirmButtonColor: "#2196f3"
+      });
       return;
     }
 
-    const studentToEdit = students.find((s) => s.id === selected[0]);
+    const studentToEdit = students.find((s) => s.id === rowSelected[0]);
     setStudent(studentToEdit);
     openModal();
   };
+
+  const columns = [
+    { field: "id", headerName: "#", sortable: false, },
+    { field: "name", headerName: "Nome", flex: 0.5 },
+    { field: "phone", headerName: "Telefone" },
+    { field: "email", headerName: "Email" },
+    { field: "address", headerName: "Endereço", flex: 1 },
+  ];
 
   const filteredStudents = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const columns = [
-    { field: "name", headerName: "Nome", width: 150 },
-    { field: "phone", headerName: "Telefone", width: 150 },
-    { field: "email", headerName: "Email", width: 200 },
-    { field: "address", headerName: "Endereço", width: 200 },
-  ];
+  useEffect(() => {
+    setLoading(true);
+
+    const fetchStudents = async () => {
+      const response = await fetch(apiURL, {
+        headers: {
+          "Accept": "application/json",
+        }
+      });
+
+      const json = await response.json();
+
+      setStudents(json);
+      setLoading(false);
+    }
+
+    fetchStudents();
+  }, []);
 
   return (
     <ThemeProvider theme={darkTheme}>
       <Container>
-        {/* Botão de adicionar */}
         <Box
           sx={{
-            py: 4,
+            py: 2,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
@@ -114,7 +232,6 @@ export default function Student() {
           }}
         ></Box>
 
-        {/* Área da pesquisa + botões */}
         <Box
           sx={{
             mt: 2,
@@ -165,45 +282,52 @@ export default function Student() {
                 },
               }}
             />
-            <Box>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 2
+              }}
+            >
               <Button
                 variant="contained"
                 color="error"
-                sx={{ mr: 1 }}
-                onClick={handleDelete}
+                disabled={rowSelected.length === 0}
+                onClick={deleteStudent}
               >
                 Excluir
               </Button>
-              <Button variant="contained" color="primary" onClick={handleEdit}>
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={rowSelected.length === 0}
+                onClick={handleEdit}
+              >
                 Editar
               </Button>
             </Box>
           </Box>
 
-          {/* Tabela com DataGrid */}
           <Paper sx={{ minHeight: 500, height: "70vh", width: "100%" }}>
             <DataGrid
               rows={filteredStudents}
               columns={columns}
               getRowId={(row) => row.id}
-              pageSizeOptions={[5, 10]}
-              checkboxSelection
-              onRowSelectionModelChange={(ids) => setSelected(ids)}
+              onRowSelectionModelChange={(id) => setRowSelected(id)}
               sx={{ border: 0 }}
+              loading={isLoading}
             />
           </Paper>
 
-          <Fab
-            color="primary"
-            aria-label="add"
-            onClick={openModal}
-            sx={{ alignSelf: "flex-end" }}
-          >
-            <Add />
-          </Fab>
+          
         </Box>
-
-        {/* Modal de cadastro */}
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={openModal}
+          sx={{ alignSelf: "flex-end", position: "fixed", bottom: 0, right: 0 }}
+        >
+          <Add />
+        </Fab>
         <Dialog open={open} onClose={closeModal}>
           <DialogTitle>
             {student.id ? "Editar Aluno" : "Cadastrar Aluno"}
@@ -244,8 +368,8 @@ export default function Student() {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={closeModal}>Cancelar</Button>
-            <Button onClick={handleSave}>Salvar</Button>
+            <Button disabled={isSaving} variant="contained" color="error" onClick={closeModal}>Cancelar</Button>
+            <Button disabled={isSaving} variant="contained" color="success" onClick={saveStudent}>Salvar</Button>
           </DialogActions>
         </Dialog>
       </Container>

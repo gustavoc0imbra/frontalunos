@@ -21,18 +21,15 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Fundo escuro moderno */
   background-color: #121212;
   color: #ffffff;
 }
 
-/* Fonte de código */
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
 }
 
-/* Scrollbar estilizada */
 * {
   box-sizing: border-box;
 }
@@ -50,10 +47,13 @@ code {
   border-radius: 10px;
 }
 
-/* Remove outline feio nos botões e inputs focados */
 button,
 input,
 textarea,
 select {
   outline: none;
+}
+
+.swal2-container {
+  z-index: 1500;
 }
