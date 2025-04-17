@@ -346,6 +346,7 @@ export default function Student() {
               margin="dense"
               label="Telefone"
               name="phone"
+              type="number"
               fullWidth
               value={student.phone}
               onChange={handleChange}
